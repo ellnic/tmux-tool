@@ -1,5 +1,9 @@
 # TT - Tmux Tool
 
+<p align="center">
+  <img src="tt.png" alt="TT TUI" />
+</p>
+
 **TT** is a small(ish), whiptail-driven helper for managing tmux sessions without having to remember tmux commands.
 
 It is intentionally, safe, and dependency-light, with careful handling around dialogs and return codes to avoid common `set -e` / whiptail pitfalls.

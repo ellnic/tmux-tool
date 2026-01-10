@@ -916,7 +916,7 @@ main_menu() {
         "7" "Kill tmux server (ALL sessions)" \
         "8" "Install shortcut into /usr/local/bin" \
         "9" "Exit"
-    )" || { unset TT_MENU_DEFAULT_ITEM; continue; }
+    )" || { unset TT_MENU_DEFAULT_ITEM; exit 0; }
 
     unset TT_MENU_DEFAULT_ITEM
 
