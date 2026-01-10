@@ -876,6 +876,89 @@ install_shortcut() {
   pause_box "Installed shortcut:\n\n${linkname}\n\nRun it from anywhere with:\n  ${linkname}"
 }
 
+manage_path_integration() {
+  local target bindir="/usr/local/bin"
+  target="$SCRIPT_PATH"
+
+  # Detect existing TT shortcut symlinks in /usr/local/bin that point to *this* script.
+  local detected_names=() detected_paths=()
+  local name path resolved
+  for name in "$DEFAULT_LINK_NAME_PRIMARY" "$DEFAULT_LINK_NAME_FALLBACK"; do
+    path="${bindir}/${name}"
+    if [[ -L "$path" ]]; then
+      resolved="$(readlink -f "$path" 2>/dev/null || true)"
+      if [[ "$resolved" == "$target" ]]; then
+        detected_names+=("$name")
+        detected_paths+=("$path")
+      fi
+    fi
+  done
+
+  if (( ${#detected_names[@]} > 0 )); then
+    local lines=""
+    local i
+    for i in "${!detected_names[@]}"; do
+      lines+="  ${detected_paths[$i]}  ->  ${target}\\n"
+    done
+
+    local choice
+    TT_MENU_DEFAULT_ITEM="1"
+    choice="$(menu_box "PATH integration detected:\n\n${lines}\nWhat do you want to do?" \
+      "1" "Remove PATH integration" \
+      "2" "Back" )" || { unset TT_MENU_DEFAULT_ITEM; return 0; }
+    unset TT_MENU_DEFAULT_ITEM
+
+    case "$choice" in
+      1)
+        if ! yesno "Remove the following shortcut(s)?\\n\\n${lines}"; then
+          return 0
+        fi
+
+        local cmd=(rm -f "${detected_paths[@]}")
+        if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+          "${cmd[@]}"
+        else
+          if have sudo; then
+            if sudo -n true >/dev/null 2>&1; then
+              sudo "${cmd[@]}" || { pause_box "sudo failed. Shortcut(s) not removed."; return 0; }
+            else
+              local pw
+              pw="$(password_box "sudo password required to remove shortcut(s):")" || return 0
+              if ! printf "%s\n" "$pw" | sudo -S -v >/dev/null 2>&1; then
+                pw=""
+                pause_box "sudo auth failed. Shortcut(s) not removed."
+                return 0
+              fi
+              pw=""
+              sudo "${cmd[@]}" || { pause_box "sudo failed. Shortcut(s) not removed."; return 0; }
+            fi
+          else
+            pause_box "sudo not available. Run this manually as root:\n\nrm -f ${detected_paths[*]}"
+            return 0
+          fi
+        fi
+
+        pause_box "Removed PATH integration:\n\n${lines}"
+        return 0
+        ;;
+      2) return 0 ;;
+    esac
+  fi
+
+  # Not installed.
+  TT_MENU_DEFAULT_ITEM="1"
+  local choice
+  choice="$(menu_box "PATH integration not detected.\n\nThis can create a shortcut in ${bindir} so you can run TT from anywhere." \
+    "1" "Install PATH integration" \
+    "2" "Back" )" || { unset TT_MENU_DEFAULT_ITEM; return 0; }
+  unset TT_MENU_DEFAULT_ITEM
+
+  case "$choice" in
+    1) must_have_fn install_shortcut && install_shortcut ;;
+    2) return 0 ;;
+  esac
+}
+
 inside_tt_menu() {
   # You're already inside tmux. Offer sensible actions instead of a warning box.
   local choice
@@ -914,7 +997,7 @@ main_menu() {
         "5" "Rename session" \
         "6" "Kill session" \
         "7" "Kill tmux server (ALL sessions)" \
-        "8" "Install shortcut into /usr/local/bin" \
+        "8" "Manage PATH integration" \
         "9" "Exit"
     )" || { unset TT_MENU_DEFAULT_ITEM; exit 0; }
 
@@ -928,7 +1011,7 @@ main_menu() {
       5) must_have_fn action_rename_session && action_rename_session ;;
       6) must_have_fn action_kill_session && action_kill_session ;;
       7) must_have_fn action_kill_server && action_kill_server ;;
-      8) must_have_fn install_shortcut && install_shortcut ;;
+      8) must_have_fn manage_path_integration && manage_path_integration ;;
       9) exit 0 ;;
     esac
   done
