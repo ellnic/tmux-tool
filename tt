@@ -245,13 +245,17 @@ yesno() {
 input_box() {
   local prompt="$1"
   local default="${2-}"
-  local out
+  local out rc tmp
   local h w
   h="$(calc_box_height "$prompt")"
   w="$(calc_box_width "$prompt")"
+
+  tmp="$(mktemp -t tt-wt-out.XXXXXX 2>/dev/null || mktemp)"
   errexit_push_off
-  out="$(wt --title "$APP_NAME" --inputbox "$prompt" "$h" "$w" "$default")"
-  local rc="$WT_LAST_RC"
+  wt --title "$APP_NAME" --inputbox "$prompt" "$h" "$w" "$default" >"$tmp"
+  rc=$?
+  out="$(<"$tmp")"
+  rm -f "$tmp"
   errexit_pop
 
   if [[ "$rc" != "0" ]]; then
@@ -267,20 +271,26 @@ input_box() {
 
 password_box() {
   local prompt="$1"
-  local out
+  local out rc tmp
   local h w
   h="$(calc_box_height "$prompt")"
   w="$(calc_box_width "$prompt")"
+
+  tmp="$(mktemp -t tt-wt-out.XXXXXX 2>/dev/null || mktemp)"
   errexit_push_off
-  out="$(wt --title "$APP_NAME" --passwordbox "$prompt" "$h" "$w")"
-  local rc="$WT_LAST_RC"
+  wt --title "$APP_NAME" --passwordbox "$prompt" "$h" "$w" >"$tmp"
+  rc=$?
+  out="$(<"$tmp")"
+  rm -f "$tmp"
   errexit_pop
+
   if [[ "$rc" != "0" ]]; then
     if [[ "$rc" != "255" && -n "${WT_LAST_ERR:-}" ]]; then
       term_notice "Dialog failed to open (rc=$rc, size=${h}x${w}, term=$(term_lines)x$(term_cols)). Try enlarging the terminal or tmux pane."
     fi
     return 1
   fi
+
   printf "%s" "$out"
 }
 
@@ -520,8 +530,10 @@ action_new_session() {
   # 3) Back to main menu
   while true; do
     local name choice rc
+    errexit_push_off
     name="$(input_box "New session name:" "")"
     rc=$?
+    errexit_pop
     if [[ "$rc" == "255" ]]; then
       return 0
     fi
@@ -892,7 +904,7 @@ inside_tt_menu() {
 main_menu() {
   while true; do
     local choice
-    TT_MENU_DEFAULT_ITEM="2"
+    TT_MENU_DEFAULT_ITEM="1"
     choice="$(
       menu_box "Choose an action:" \
         "1" "Create new session" \
@@ -904,7 +916,7 @@ main_menu() {
         "7" "Kill tmux server (ALL sessions)" \
         "8" "Install shortcut into /usr/local/bin" \
         "9" "Exit"
-    )" || exit 0
+    )" || { unset TT_MENU_DEFAULT_ITEM; continue; }
 
     unset TT_MENU_DEFAULT_ITEM
 
